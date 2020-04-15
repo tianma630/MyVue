@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh">
+
+<head>
+  <meta charset="utf-8">
+  <title></title>
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fafafa">
+
+  <!-- <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script> -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+  <script type="text/javascript" src="../src/MyVue.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <div>
+      <span v-text="name"></span>
+    </div>
+    <div v-html="hl"></div>
+    <ul>
+      <li v-for="(book, index) in books">
+       <span> {{book.title}}</span>
+      </li>
+    </ul>
+    <input type="text" v-model="name" />
+    <div>{{name}} -- {{age}}</div>
+    <div>
+      <button v-on:click="submit">submit</button>
+    </div>
+  </div>
+</body>
+</html>
