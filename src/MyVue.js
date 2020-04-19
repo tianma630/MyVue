@@ -33,7 +33,7 @@ function createRenderExpr() {
         if (renderParamCb) {
           renderParamCb($1);
         }
-        return 'data.' + $1
+        return 'data.' + $1;
       }
       return $1;
     })
@@ -76,8 +76,6 @@ const directiveHander = {
   },
   for(el, expr, vm) {
     const parentEl = el.parentElement;
-    // 缓存第一个节点
-    // const cacheEl = el.cloneNode(true);
     parentEl.removeChild(el);
     el.removeAttribute('v-for');
 
@@ -119,10 +117,14 @@ const directiveHander = {
           let cloneEl = el.cloneNode(true);
           parentEl.appendChild(cloneEl);
 
-          const forData = {};
+          const forData = {
+            _key: forKey,
+            _val: forValue,
+          };
           forData[forKey] = item;
           if (forIndex) {
             forData[forIndex] = index;
+            forData['_index'] = forIndex;
           }
           mapCompile([cloneEl], forData, vm.methods, vm, true);
           
@@ -142,10 +144,10 @@ function textHandle(el, vm, data, inFor) {
   }
 
   const expr = el.nodeValue;
-  const [exprValue, isExpr] = renderExpr(expr, data, inFor ? () => {} : $1 => {
+  const [exprValue, isExpr] = renderExpr(expr, data, $1 => {
     new Watcher(vm, expr, newValue => {
       el.nodeValue = newValue;
-    });
+    }, inFor ? data : null);
   });
 
   if (isExpr) {
@@ -273,6 +275,8 @@ class Observer {
   observeArray(array) {
     arrayMethods.__ob__ = new Dep();
     array.__proto__ = arrayMethods;
+
+    array.forEach(item => this.observe(item));
   }
 }
 
@@ -291,19 +295,27 @@ class Dep {
 }
 
 class Watcher {
-  constructor(vm, expr, cb) {
+  constructor(vm, expr, cb, data) {
     this.vm = vm;
     this.expr = expr;
     this.cb = cb;
+    this.data = data;
 
     this.oldValue = this.get(expr, vm);
   }
 
   get(expr, vm) {
     Dep.target = this;
-    let [value, isExpr] = renderExpr(expr, vm.$data);
+    let _data = this.vm.$data;
+    if (this.data) {
+      _data = {};
+      _data[this.data._index] = this.data[this.data._index];
+      _data[this.data._key] = this.vm.$data[this.data._val][_data[this.data._index]];
+      
+    }
+    let [value, isExpr] = renderExpr(expr, _data);
     if (!isExpr) {
-      value = getValue(expr, vm);
+      value = (vm.forData || vm.$data)[expr]
     }
     Dep.target = null;
     return value;

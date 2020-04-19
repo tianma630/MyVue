@@ -27,7 +27,13 @@
     <input type="text" v-model="name" />
     <div>{{'hello: ' + name}} -- {{age + 1}}</div>
     <div>
-      <button v-on:click="submit">submit</button>
+      <button v-on:click="submit1">修改数据</button>
+    </div>
+    <div>
+      <button v-on:click="submit2">增加数组</button>
+    </div>
+    <div>
+      <button v-on:click="submit3">修改数组</button>
     </div>
     <button-counter></button-counter>
   </div>
@@ -52,20 +58,20 @@ let vm = new MyVue({
     books: [{title: 'java'}, {title: 'javascript'}, {title: 'dart'}]
   },
   methods: {
-    submit() {
-      console.log('hello', this.name);
+    submit1() {
+      console.log('修改数据');
       this.hl = '<span style="color: #f00">456</span>'
-      this.name = 'wjwj'
-
-      this.books.push({title: 'math'})
+      this.name = this.name + ' wj'
+    },
+    submit2() {
+      console.log('增加数组');
+      this.books.push({title: 'math'});
+    },
+    submit3() {
+      console.log('修改数组');
+      this.books[0].title = this.books[0].title + ' ok';
     }
   },
-  // watch: {
-  //   // 如果 `question` 发生改变，这个函数就会运行
-  //   name: function (newValue, oldValue) {
-  //     console.log(newValue, oldValue);
-  //   }
-  // },
 });
 
 
