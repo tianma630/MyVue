@@ -5,7 +5,7 @@ const forReg2 = /^\s*\((\S+),\s*(\S+)\)\s*in\s*(\S+)\s*$/g;
 // 匹配 {{name}} - {{age}}
 const exprReg1 = /{{([^{{}}]+)}}/g;
 // 匹配 'hello' + name + ':' + age
-const exprReg2 = /[\s|\+|-|\*|/]?([^\s|\+|-|\*|/]+)[\s|\+|-|\*|/]?/g;
+const exprReg2 = /[\s|\+|-|\*|/]([^\s|\+|-|\*|/|'|"]+)[\s|\+|-|\*|/]/g;
 
 /**
  * 是否是dom节点
@@ -43,7 +43,7 @@ function createRenderExpr() {
     let isExpr = false;
     return [expr.replace(exprReg1, (r, $1) => {
       isExpr = true;
-      return eval(_renderParam($1, renderParamCb));
+      return eval(_renderParam(' ' + $1 + ' ', renderParamCb));
     }), isExpr]
   }
 }
@@ -52,10 +52,6 @@ const renderExpr = createRenderExpr();
 
 function getValue(expr, vm) {
   return vm.$data[expr];
-}
-
-function forRender() {
-  
 }
 
 // 指令处理
@@ -80,6 +76,9 @@ const directiveHander = {
   },
   for(el, expr, vm) {
     const parentEl = el.parentElement;
+    // 缓存第一个节点
+    // const cacheEl = el.cloneNode(true);
+    parentEl.removeChild(el);
     el.removeAttribute('v-for');
 
     let forKey = null;
@@ -100,49 +99,52 @@ const directiveHander = {
     }
 
     if (forKey && forValue) {
-      const list = getValue(forValue, vm);
+      let list = vm.$data[forValue];
 
-      // 缓存第一个节点
-      const cacheEl = el.cloneNode(true);
-      let index = 0;
-      list.forEach(item => {
-        let cloneEl;
-        if (index == 0) {
-          // 第一个节点复用原来的第一个节点
-          cloneEl = el;
-        } else if (index === list.length - 1) {
-          // 最后一个节点复用缓存的节点
-          cloneEl = cacheEl
-          parentEl.appendChild(cloneEl);
-        } else {
-          // 克隆节点
-          cloneEl = cacheEl.cloneNode(true);
-          parentEl.appendChild(cloneEl);
-        }
+      list.__ob__.addSub({
+        update: () => {
+          const childs = parentEl.childNodes; 
+          for(let i = childs .length - 1; i >= 0; i--) {
+            parentEl.removeChild(childs[i]);
+          }
 
-        const forData = {};
-        forData[forKey] = item;
-        if (forIndex) {
-          forData[forIndex] = index;
+          _render();
         }
-        mapCompile([cloneEl], forData, vm.methods, vm);
-        
-        index ++;
       });
+
+      function _render() {
+        list = vm.$data[forValue];
+        let index = 0;
+        list.forEach(item => {
+          let cloneEl = el.cloneNode(true);
+          parentEl.appendChild(cloneEl);
+
+          const forData = {};
+          forData[forKey] = item;
+          if (forIndex) {
+            forData[forIndex] = index;
+          }
+          mapCompile([cloneEl], forData, vm.methods, vm, true);
+          
+          index ++;
+        });
+      }
+
+      _render();
     }
   }
 };
 
 // 文本处理
-function textHandle(el, vm) {
+function textHandle(el, vm, data, inFor) {
   if(!el.nodeValue.trim()) {
     return;
   }
 
   const expr = el.nodeValue;
-  const [exprValue, isExpr] = renderExpr(expr, vm.$data, $1 => {
-    new Watcher(vm, $1, () => {
-      el.nodeValue = renderExpr(expr, vm.$data)[0];
+  const [exprValue, isExpr] = renderExpr(expr, data, inFor ? () => {} : $1 => {
+    new Watcher(vm, expr, newValue => {
+      el.nodeValue = newValue;
     });
   });
 
@@ -152,10 +154,11 @@ function textHandle(el, vm) {
 }
 
 // 递归遍历节点
-function mapCompile(childNodes, data, methods, vm) {
+function mapCompile(childNodes, data, methods, vm, inFor) {
   function mapChildNodes(childNodes) {
     childNodes.forEach(child => {
       if (isElement(child)) {
+        let isFor = false;
         [...child.attributes].forEach(attr => {
           if (attr.name.startsWith('v-')) {
             let directive, eventName;
@@ -166,16 +169,19 @@ function mapCompile(childNodes, data, methods, vm) {
                 (methods[attr.value] && methods[attr.value].bind(vm))();
               });
             } else if (directive) {
+              if (directive === 'for') {
+                isFor = true;
+              }
               directiveHander[directive](child, attr.value, vm);
             }
           }
         })
   
-        if (isElement(child) && child.childNodes.length) {
+        if (isElement(child) && child.childNodes.length && !isFor) {
           mapChildNodes([...child.childNodes]);
         }
       } else if (isText(child)) {
-        textHandle(child, vm)
+        textHandle(child, vm, data, inFor);
       }
     })
   }
@@ -265,7 +271,8 @@ class Observer {
   }
 
   observeArray(array) {
-
+    arrayMethods.__ob__ = new Dep();
+    array.__proto__ = arrayMethods;
   }
 }
 
@@ -294,15 +301,66 @@ class Watcher {
 
   get(expr, vm) {
     Dep.target = this;
-    const value = getValue(expr, vm);
+    let [value, isExpr] = renderExpr(expr, vm.$data);
+    if (!isExpr) {
+      value = getValue(expr, vm);
+    }
     Dep.target = null;
     return value;
   }
 
   update() {
-    const newValue = getValue(this.expr, this.vm);
+    const newValue = this.get(this.expr, this.vm);
     if (newValue !== this.oldValue) {
-      this.cb(newValue);
+      this.cb.call(this.vm, newValue);
     }
   }
 }
+
+function def (obj, key, val, enumerable) {
+  Object.defineProperty(obj, key, {
+    value: val,
+    enumerable: !!enumerable,
+    writable: true,
+    configurable: true
+  });
+}
+
+// **** 劫持数组方法，直接复用vue的源码(https://github.com/vuejs/vue/blob/dev/src/core/observer/array.js) ****
+
+const arrayProto = Array.prototype
+var arrayMethods = Object.create(arrayProto);
+
+const methodsToPatch = [
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse'
+]
+
+/**
+ * Intercept mutating methods and emit events
+ */
+methodsToPatch.forEach(function (method) {
+  // cache original method
+  const original = arrayProto[method]
+  def(arrayMethods, method, function (...args) {
+    const result = original.apply(this, args)
+    const ob = this.__ob__
+    let inserted
+    switch (method) {
+      case 'push':
+      case 'unshift':
+        inserted = args
+        break
+      case 'splice':
+        inserted = args.slice(2)
+        break
+    }
+    ob && ob.notify();
+    return result
+  })
+})

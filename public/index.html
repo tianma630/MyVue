@@ -8,11 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#fafafa">
 
-  <!-- <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script> -->
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
 
   <script type="text/javascript" src="../src/MyVue.js"></script>
-  <!-- <script src="./1.js"></script> -->
 </head>
 
 <body>
@@ -22,9 +20,9 @@
     </div>
     <div v-html="hl"></div>
     <ul>
-      <!-- <li v-for="(book, index) in books">
-       <span> {{book.title}}</span>
-      </li> -->
+      <li v-for="(book, index) in books">
+       <span> {{'hi: ' + book.title}}</span>
+      </li>
     </ul>
     <input type="text" v-model="name" />
     <div>{{'hello: ' + name}} -- {{age + 1}}</div>
@@ -59,7 +57,7 @@ let vm = new MyVue({
       this.hl = '<span style="color: #f00">456</span>'
       this.name = 'wjwj'
 
-      this.books[0].title = 'javajava';
+      this.books.push({title: 'math'})
     }
   },
   // watch: {
