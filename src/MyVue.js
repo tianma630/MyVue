@@ -3,26 +3,55 @@ const forReg1 = /^\s*(\S+)\s*in\s*(\S+)\s*$/g;
 // 匹配 (book, i) in books
 const forReg2 = /^\s*\((\S+),\s*(\S+)\)\s*in\s*(\S+)\s*$/g;
 // 匹配 {{name}} - {{age}}
-const paramReg = /{{([^{}]+)}}/g;
+const exprReg1 = /{{([^{{}}]+)}}/g;
+// 匹配 'hello' + name + ':' + age
+const exprReg2 = /[\s|\+|-|\*|/]?([^\s|\+|-|\*|/]+)[\s|\+|-|\*|/]?/g;
 
+/**
+ * 是否是dom节点
+ * @param {HTMLElement} el 
+ */
 function isElement(el) {
   return el.nodeType === 1;
 }
 
+/**
+ * 是否是text节点
+ * @param {HTMLElement} el 
+ */
 function isText(el) {
   return el.nodeType === 3;
 }
 
-function getValue(expr, vm) {
-  return eval('vm.$data.' + expr);
+/**
+ * 解析复杂表达式 {{'hello' + name + ':' + age}} => {{'hello' + data.name + ':' + data.age}}
+ */ 
+function createRenderExpr() {
+  function _renderParam(expr, renderParamCb) {
+    return expr.replace(exprReg2, (r, $1) => {
+      if (/^[a-zA-Z\$].*/.test($1)) {
+        if (renderParamCb) {
+          renderParamCb($1);
+        }
+        return 'data.' + $1
+      }
+      return $1;
+    })
+  }
+
+  return function renderExpr(expr, data, renderParamCb) {
+    let isExpr = false;
+    return [expr.replace(exprReg1, (r, $1) => {
+      isExpr = true;
+      return eval(_renderParam($1, renderParamCb));
+    }), isExpr]
+  }
 }
 
-function getContent(expr, vm) {
-  return expr.replace(paramReg, (r, $1) => {
-    with (vm.$data) {
-			return eval($1);
-		}
-  });
+const renderExpr = createRenderExpr();
+
+function getValue(expr, vm) {
+  return vm.$data[expr];
 }
 
 function forRender() {
@@ -41,7 +70,7 @@ const directiveHander = {
     new Watcher(vm, expr, newValue => {
       el.innerHTML = newValue;
     });
-    el.innerHTML = getValue(expr, vm);;
+    el.innerHTML = getValue(expr, vm);
   },
   model(el, expr, vm) {
     new Watcher(vm, expr, newValue => {
@@ -109,16 +138,17 @@ function textHandle(el, vm) {
   if(!el.nodeValue.trim()) {
     return;
   }
-  // 缓存expr，用于数据更新时重新生成value
-  el['my-text'] = el.nodeValue;
-  el.nodeValue = el.nodeValue.replace(paramReg, (r, $1) => {
+
+  const expr = el.nodeValue;
+  const [exprValue, isExpr] = renderExpr(expr, vm.$data, $1 => {
     new Watcher(vm, $1, () => {
-      el.nodeValue = getContent(el['my-text'], vm);
+      el.nodeValue = renderExpr(expr, vm.$data)[0];
     });
-    with (vm.$data) {
-			return eval($1);
-		}
   });
+
+  if (isExpr) {
+    el.nodeValue = exprValue;
+  }
 }
 
 // 递归遍历节点
